@@ -4,6 +4,8 @@
 
 Find one or more systematic strategies that remain economically viable over **5+ years and multiple market regimes**, then graduate only the strongest frozen candidate into an automated research/paper system that can run on a daily schedule and report results without manual intervention.
 
+The eventual practical research target is a **small starting account around $5,000**, growing over time. Creator leverage, notional and headline returns are therefore separated from signal quality. Any serious contender must later pass a small-account feasibility layer covering position granularity, realistic costs, turnover and drawdown without relying on extreme leverage.
+
 The current project phase is **experimentation and evidence collection**. It is not a live-trading deployment project.
 
 ## Promotion ladder
@@ -47,6 +49,21 @@ A strategy becomes a serious long-term contender only when the evidence supports
 - no unresolved source/parity issue is large enough to invalidate the comparison.
 
 The 5-year rule is a **minimum evidence horizon**, not a guarantee that a strategy is safe or durable.
+
+### Stage 3B — small-account feasibility
+
+Before a long-term contender can be considered for the eventual automation layer, test the frozen signal under account-size constraints that are relevant to the project rather than the creator's headline sizing.
+
+At minimum record:
+
+- a paper baseline around the project's ~$5,000 starting size;
+- the smallest practical instrument/position granularity available for the market being studied;
+- commission, spread/slippage and turnover as a percentage of account size;
+- drawdown depth and duration at the normalized position size;
+- whether reasonable sizing is possible without hidden leverage assumptions;
+- whether the signal still has economic value after it is scaled down.
+
+This stage is a feasibility test, not permission to trade. A strategy may have a statistically interesting signal and still be unsuitable for a small account.
 
 ### Stage 4 — prospective shadow/paper monitoring
 
