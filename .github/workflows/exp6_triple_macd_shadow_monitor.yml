@@ -5,18 +5,14 @@ on:
     # Weekly research check after the public NQ source has had time to update.
     - cron: "15 12 * * 1"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/exp6_triple_macd_shadow_monitor.yml"
-      - "scripts/run_exp6_shadow_monitor.py"
-      - "scripts/run_exp6_2026_sample.py"
-      - "ai_investing_lab/strategies/triple_macd_nq/**"
-      - "tests/test_triple_macd_nq.py"
 
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: exp6-shadow-monitor
+  cancel-in-progress: true
 
 jobs:
   monitor:
@@ -56,9 +52,8 @@ jobs:
         with:
           name: exp6-triple-macd-nq-shadow-health
           path: exp6_shadow_health/
-          retention-days: 30
+          retention-days: 14
       - name: Raise or clear structural health issue
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
