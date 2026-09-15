@@ -1,0 +1,51 @@
+name: AI15 source and public-sample validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review, synchronize]
+    paths:
+      - "ai_investing_lab/strategies/ai15_triple_ma/**"
+      - "tests/test_ai15_triple_ma.py"
+      - "scripts/run_ai15_public_2026.py"
+      - "docs/AI15_SIMPLE_TRIPLE_MA.md"
+      - ".github/workflows/ai15_validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai15-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    # Heavy-ish data download/backtest runs only for an explicitly marked PR
+    # or a manual dispatch. Ordinary development pushes do not start a runner.
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[full-validate]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install project and tests
+        run: python -m pip install --disable-pip-version-check -e . pytest
+      - name: Run deterministic AI15 tests
+        run: python -m pytest tests/test_ai15_triple_ma.py -q
+      - name: Run independent public 2026 ES sample
+        run: python scripts/run_ai15_public_2026.py
+      - name: Show research summary
+        run: cat ai15_public_2026/AI15_PUBLIC_2026.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload AI15 public-sample bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai15-public-2026
+          path: ai15_public_2026/
+          retention-days: 14
