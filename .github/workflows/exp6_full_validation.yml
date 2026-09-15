@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    types: [ready_for_review]
+    types: [synchronize, ready_for_review]
     paths:
       - "ai_investing_lab/strategies/triple_macd_nq/**"
       - "scripts/run_exp6_*.py"
@@ -21,8 +21,9 @@ concurrency:
 
 jobs:
   full-validation:
-    # PR execution is explicit: add [full-validate] to the PR title and move the
-    # PR from draft to ready. Normal PR edits never launch this heavy suite.
+    # PR execution is explicit: add [full-validate] to the PR title only when
+    # the branch is ready for its heavyweight validation pass. Normal PR edits
+    # without that marker start no runner job.
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[full-validate]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
