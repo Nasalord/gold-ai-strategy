@@ -2,22 +2,17 @@ name: AI58 automated health monitor
 
 on:
   schedule:
-    # Tue-Sat at 02:00 UTC, after the prior New York FX trading day has closed.
-    - cron: "0 2 * * 2-6"
+    # Unified weekly research cadence. Monday after the prior FX week has closed.
+    - cron: "15 13 * * 1"
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/workflows/ai58_health_monitor.yml"
-      - "scripts/run_ai58_health_monitor.py"
-      - "scripts/render_ai58_health_report.py"
-      - "scripts/run_ai58_regime_risk.py"
-      - "scripts/fetch_dukascopy_usdjpy.py"
-      - "ai_investing_lab/strategies/ai58_usdjpy/**"
 
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: ai58-health-monitor
+  cancel-in-progress: true
 
 jobs:
   monitor:
@@ -73,7 +68,7 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
           cat health_artifacts/AI58_HEALTH.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload daily health artifact
+      - name: Upload weekly health artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai58-health-${{ steps.horizon.outputs.end_date }}
@@ -81,7 +76,6 @@ jobs:
           retention-days: 30
 
       - name: Raise or clear AI58 health alert
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -100,6 +94,6 @@ jobs:
               gh issue edit "$EXISTING" --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI58_HEALTH.md
             fi
           elif [[ -n "$EXISTING" ]]; then
-            gh issue comment "$EXISTING" --repo "$REPO" --body "AI58 returned to ${HEADLINE}. Closing the automated health alert. Daily research monitoring continues."
+            gh issue comment "$EXISTING" --repo "$REPO" --body "AI58 returned to ${HEADLINE}. Closing the automated health alert. Weekly research monitoring continues."
             gh issue close "$EXISTING" --repo "$REPO" --reason completed
           fi

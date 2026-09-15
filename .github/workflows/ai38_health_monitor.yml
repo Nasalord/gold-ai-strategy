@@ -2,31 +2,17 @@ name: AI38 automated health monitor
 
 on:
   schedule:
-    # Tue-Sat at 03:00 UTC, after the prior FX trading day has closed.
-    - cron: "0 3 * * 2-6"
+    # Unified weekly research cadence. Monday after the prior FX week has closed.
+    - cron: "0 13 * * 1"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ai38_health_monitor.yml"
-      - "scripts/run_ai38_health_monitor.py"
-      - "scripts/render_ai38_health_report.py"
-      - "scripts/fetch_dukascopy_gbpusd_4h.py"
-      - "ai_investing_lab/strategies/ai38_gbpusd/**"
-      - "tests/test_ai38_gbpusd.py"
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/workflows/ai38_health_monitor.yml"
-      - "scripts/run_ai38_health_monitor.py"
-      - "scripts/render_ai38_health_report.py"
-      - "scripts/fetch_dukascopy_gbpusd_4h.py"
-      - "ai_investing_lab/strategies/ai38_gbpusd/**"
-      - "tests/test_ai38_gbpusd.py"
 
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: ai38-health-monitor
+  cancel-in-progress: true
 
 jobs:
   monitor:
@@ -84,7 +70,7 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
           cat health_artifacts/AI38_HEALTH.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload daily health artifact
+      - name: Upload weekly health artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai38-health-${{ steps.horizon.outputs.end_date }}
@@ -92,7 +78,6 @@ jobs:
           retention-days: 30
 
       - name: Raise or clear AI38 health alert
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -111,6 +96,6 @@ jobs:
               gh issue edit "$EXISTING" --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI38_HEALTH.md
             fi
           elif [[ -n "$EXISTING" ]]; then
-            gh issue comment "$EXISTING" --repo "$REPO" --body "AI38 returned to ${HEADLINE}. Closing the automated health alert. Daily research monitoring continues."
+            gh issue comment "$EXISTING" --repo "$REPO" --body "AI38 returned to ${HEADLINE}. Closing the automated health alert. Weekly research monitoring continues."
             gh issue close "$EXISTING" --repo "$REPO" --reason completed
           fi
