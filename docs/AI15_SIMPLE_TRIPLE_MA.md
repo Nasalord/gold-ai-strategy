@@ -1,6 +1,6 @@
 # AI15 — Simple Triple MA on ES1! 10m
 
-**Research state:** source reconstruction implemented; independent long-history parity still pending.
+**Research state:** source reconstruction implemented; short independent 2026 sample passed directionally; independent long-history parity still pending.
 
 **Deployment state:** research / backtest / paper only. No live order routing.
 
@@ -63,26 +63,42 @@ Optimization window: **2020-05-01 through 2024-05-01**.
 
 The creator also reported a post-optimization check beginning 2024-05-01 with roughly **44 trades, +65% net profit, PF ~1.5 and ~32% max drawdown** at the time of the video. That is creator-reported OOS evidence, not an independent result.
 
+## Independent public 2026 sample
+
+The first independent check uses the public `getdata-finance/es-1m-ohlcv-stocks-historical-data` sample, pinned to commit `0908875a9f414e56c1d5117166965b21175774ed` for reproducibility. The file contains 55,440 one-minute rows from 2026-04-01 through 2026-09-02; it is resampled to 5,614 ten-minute bars. April is warmup only and scoring begins 2026-05-01.
+
+| Case | Trades | Win % | Net % | PF | Closed-trade DD % |
+|---|---:|---:|---:|---:|---:|
+| Creator ES semantics / source-code exit updates | 15 | 40.00 | **+79.53** | **1.449** | **63.38** |
+| Narrated no-update exit variant | 14 | 42.86 | **+82.27** | **1.472** | **62.55** |
+| Creator ES semantics / 2× costs | 15 | 40.00 | **+74.85** | **1.414** | **64.59** |
+| One MES / $5k paper sensitivity | 15 | 40.00 | **+51.94** | **1.437** | **51.34** |
+| One MES / $5k paper / 2× costs | 15 | 40.00 | **+47.74** | **1.392** | **52.56** |
+
+The short sample is directionally encouraging: profitability survives doubled costs and the source-vs-narration ambiguity does not materially change the conclusion in this window. However, **14–15 trades is far too small for long-term qualification**, and the drawdown is very large at both creator and one-MES/$5k paper sizing. This result is evidence to continue researching AI15, not evidence to promote it.
+
 ## Small-account research boundary
 
 The eventual project account is expected to begin around **$5,000**. The creator's $1.25M order-cash setting is therefore treated strictly as a parity/reconstruction setting, not as a deployment plan.
 
 The public runner includes a **one-MES, $5k paper sensitivity case** using the exact same ES signal rules with the Micro E-mini $5/point multiplier. This is only to separate signal behavior from the creator's aggressive sizing. It does not assume a broker margin requirement or imply that a $5k live futures account is appropriate.
 
+The 2026 one-MES sensitivity still produced roughly **51% closed-trade drawdown**, so even the micro-sized version is not yet compatible with the project's long-term small-account risk objective. Future research must investigate whether the underlying signal is durable before any separate position-sizing/risk layer is considered.
+
 ## Independent data plan
 
-The first reproducible independent check uses the public 2026 ES 1-minute sample from `getdata-finance/es-1m-ohlcv-stocks-historical-data`, resampled to 10-minute bars. April 2026 is used only for indicator warmup and scoring begins 2026-05-01.
+The public 2026 sample is **not sufficient for the project's 5+ year qualification requirement**. Creator-window parity and long-term qualification still require a continuous historical ES dataset spanning at least 2020-present, with an explicit and reproducible contract-roll method. No parameter changes are allowed after reading those future results.
 
-That public sample is **not sufficient for the project's 5+ year qualification requirement**. Creator-window parity and long-term qualification still require a continuous historical ES dataset spanning at least 2020-present, with an explicit and reproducible contract-roll method. No parameter changes are allowed after reading those future results.
+The next AI15 milestone is therefore an independently constructed long-history ES series with a frozen roll convention, followed by creator-window parity, pre-optimization backlog where available, untouched post-2024 OOS, calendar-year regimes, rolling windows, doubled-cost stress and predeclared local-neighbour robustness.
 
-## Planned validation ladder
+## Validation ladder
 
-1. deterministic unit tests for source parameters, MA construction, next-bar fills, costs and futures sizing;
-2. independent 2026 public sample under source-code semantics;
-3. predeclared narration-ambiguity variant;
-4. 2× execution-cost stress;
-5. normalized one-MES / $5k paper sensitivity;
-6. obtain independent continuous ES history and test 2020-2024 creator parity;
+1. deterministic unit tests for source parameters, MA construction, next-bar fills, costs and futures sizing — **complete**;
+2. independent 2026 public sample under source-code semantics — **complete**;
+3. predeclared narration-ambiguity variant — **complete**;
+4. 2× execution-cost stress on the public sample — **complete**;
+5. normalized one-MES / $5k paper sensitivity — **complete**;
+6. obtain independent continuous ES history and test 2020-2024 creator parity — **next**;
 7. test pre-2020 backlog where data permits;
 8. test untouched 2024-present OOS, calendar regimes and rolling 6m/12m/24m/36m/60m windows;
 9. predeclared local-neighbour robustness without rescuing failures by retuning;
