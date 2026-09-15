@@ -20,7 +20,11 @@ Heavy validation must not run on every push. Prefer `workflow_dispatch` or anoth
 
 ### L3 — frozen monitoring
 
-Once an experiment is frozen, scheduled shadow/paper monitoring continues at the frequency justified by the strategy. Monitoring workflows should not also trigger on ordinary source pushes.
+Once an experiment is frozen, scheduled shadow/paper monitoring continues at the frequency justified by the strategy. Monitoring workflows must not also trigger on ordinary source pushes or pull-request edits.
+
+During the current experiment/data-collection phase, long-horizon health monitors use a **weekly cadence** unless a documented strategy-specific reason requires more frequent observation. The current monitored set is AI2, AI8, AI38, AI58, and EXP6: five scheduled monitor runs per week instead of the previous nineteen.
+
+The eventual daily-reporting cadence is reserved for a strategy that has passed the long-term qualification process in `docs/LONG_TERM_RESEARCH_PLAN.md`.
 
 ## Development rules
 
@@ -32,6 +36,21 @@ Once an experiment is frozen, scheduled shadow/paper monitoring continues at the
 - Keep artifacts only as long as they remain useful for review.
 - Record runner usage after major experiments so future workflow design is based on measured cost.
 - Preserve the full scientific validation package; never remove OOS, robustness, cost, parity, or monitoring checks merely to save Actions minutes.
+- Do not monitor rejected or replication-incomplete strategies simply because a workflow exists.
+
+## Monitoring schedule
+
+The weekly monitors are staggered on Monday UTC so they do not all start simultaneously:
+
+| Strategy | Schedule |
+|---|---|
+| EXP6 | Monday 12:15 UTC |
+| AI2 | Monday 12:30 UTC |
+| AI8 | Monday 12:45 UTC |
+| AI38 | Monday 13:00 UTC |
+| AI58 | Monday 13:15 UTC |
+
+Every monitor also keeps `workflow_dispatch` for deliberate manual investigation.
 
 ## Experiment 6 implementation
 
