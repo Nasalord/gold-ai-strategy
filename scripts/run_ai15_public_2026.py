@@ -13,7 +13,8 @@ from ai_investing_lab.strategies.ai15_triple_ma.config import TripleMAConfig
 from ai_investing_lab.strategies.ai15_triple_ma.engine import Candle, TripleMABacktester
 
 UTC = timezone.utc
-URL = "https://raw.githubusercontent.com/getdata-finance/es-1m-ohlcv-stocks-historical-data/main/ES_1m.csv"
+SOURCE_COMMIT = "0908875a9f414e56c1d5117166965b21175774ed"
+URL = f"https://raw.githubusercontent.com/getdata-finance/es-1m-ohlcv-stocks-historical-data/{SOURCE_COMMIT}/ES_1m.csv"
 OUT = Path("ai15_public_2026")
 
 
@@ -116,7 +117,7 @@ def main() -> int:
         raise RuntimeError("public ES sample returned no usable rows")
     candles = resample_10m(rows)
 
-    # April is warmup only.  The public evaluation begins May 1 so all three
+    # April is warmup only. The public evaluation begins May 1 so all three
     # creator moving averages and ATR have ample history before scoring starts.
     trade_start = datetime(2026, 5, 1, tzinfo=UTC)
 
@@ -154,6 +155,8 @@ def main() -> int:
         "market": "ES price series / 10-minute",
         "status": "INDEPENDENT PUBLIC 2026 SAMPLE — RESEARCH ONLY",
         "source": {
+            "repository": "getdata-finance/es-1m-ohlcv-stocks-historical-data",
+            "commit": SOURCE_COMMIT,
             "url": URL,
             "minute_rows": len(rows),
             "ten_minute_bars": len(candles),
