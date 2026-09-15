@@ -16,6 +16,12 @@ A public, paper-first research repository for systematic strategy reconstruction
 
 AI1, AI2, AI8, AI38, AI58, AI65, and Experiment #6 (Triple MACD NQ), including strategy engines, source-fidelity/parity tooling, validation scripts, regression tests, documentation, and GitHub Actions workflows.
 
+Experiment #6 is now **research-phase complete and parameter-frozen** with a final classification of **WATCHLIST / SHADOW-PAPER RESEARCH ONLY**. See `docs/EXP6_TRIPLE_MACD_NQ.md`.
+
+## Validation execution
+
+The project keeps full validation depth while limiting duplicate GitHub Actions execution. Routine development uses lean CI, heavyweight experiment validation is deliberate, and frozen monitors run only on their research cadence. See `docs/ACTIONS_USAGE_POLICY.md` and `ARCHITECTURE.md`.
+
 ## Privacy boundary
 
 This public snapshot intentionally excludes personal portfolio balances, brokerage account identifiers, credentials, tokens, cookies, private market-data databases, private execution records, and the private repository's historical commits/issues/PRs.

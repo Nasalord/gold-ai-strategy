@@ -74,7 +74,10 @@ def resample(rows):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--trade-start", default="2026-04-01")
+    # The source begins Apr 1, 2026; April is warmup only. The frozen evaluation
+    # window intentionally starts May 1 so the documented six-trade recovery
+    # fingerprint cannot drift because of an accidental default change.
+    ap.add_argument("--trade-start", default="2026-05-01")
     ap.add_argument("--trade-end", default="2026-09-03")
     ap.add_argument("--out-dir", default="exp6_2026_sample")
     args = ap.parse_args()
@@ -116,12 +119,13 @@ def main() -> int:
         "metrics": metrics,
         "notes": [
             "This dataset is independent from both TradingView and the 2022-2025 public dataset used in earlier EXP6 diagnostics.",
+            "April 2026 is indicator warmup only; the frozen evaluation starts May 1, 2026.",
             "No strategy parameters were changed after observing 2025 OOS.",
             "Results are research/paper-only and are not live-trade instructions.",
         ],
     }
     (out / "exp6_2026_sample.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    lines = ["# Experiment 6 — independent 2026 NQ sample", "", "Parameters frozen before this window.", "", "| Case | Trades | Win % | Net % | PF | Closed DD % |", "|---|---:|---:|---:|---:|---:|"]
+    lines = ["# Experiment 6 — independent 2026 NQ sample", "", "Parameters frozen before this window. April 2026 is warmup only.", "", "| Case | Trades | Win % | Net % | PF | Closed DD % |", "|---|---:|---:|---:|---:|---:|"]
     for name,m in metrics.items():
         lines.append(f"| {name} | {m['trades']} | {m['win_rate_pct']:.2f} | {m['net_profit_pct']:.3f} | {m['profit_factor']:.3f} | {m['max_closed_trade_drawdown_pct']:.2f} |")
     (out / "EXP6_2026_SAMPLE.md").write_text("\n".join(lines)+"\n", encoding="utf-8")

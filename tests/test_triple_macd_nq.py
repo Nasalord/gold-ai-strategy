@@ -7,6 +7,7 @@ from ai_investing_lab.strategies.triple_macd_nq.engine import (
     previous_window_low,
 )
 from ai_investing_lab.strategies.triple_macd_nq.indicators import ema, macd_hist, tdfi
+from scripts.run_exp6_shadow_monitor import classify
 
 
 def test_creator_preset_is_frozen_to_supplied_nq_csv():
@@ -102,3 +103,10 @@ def test_tdfi_has_source_shape_and_stays_normalized():
     assert len(x) == len(close)
     assert vals
     assert max(abs(v) for v in vals) <= 1.000000000001
+
+
+def test_shadow_health_gate_is_frozen_and_sample_aware():
+    assert classify({"trades": 19, "net_profit_pct": -99.0, "profit_factor": 0.0})[0] == "observing_insufficient_sample"
+    assert classify({"trades": 20, "net_profit_pct": 1.0, "profit_factor": 1.1})[0] == "healthy"
+    assert classify({"trades": 20, "net_profit_pct": 0.0, "profit_factor": 1.1})[0] == "weak"
+    assert classify({"trades": 20, "net_profit_pct": -1.0, "profit_factor": 0.79})[0] == "structural_concern"
