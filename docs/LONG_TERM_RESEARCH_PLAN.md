@@ -8,6 +8,22 @@ The eventual practical research target is a **small starting account around $5,0
 
 The current project phase is **experimentation and evidence collection**. It is not a live-trading deployment project.
 
+## Default historical test horizon
+
+For every strategy, the project will target **January 1, 2016 through the latest trustworthy data available** as the standard long-history evaluation horizon.
+
+Rules:
+
+- if reliable data is available from 2016, use the full 2016-to-present history rather than selecting a shorter favorable window;
+- if the available dataset starts later than 2016, use the **earliest reliable date actually available** and clearly report the missing-history limitation;
+- if a trustworthy dataset extends earlier than 2016, retain that earlier history as an additional deep-history/backlog test rather than discarding it;
+- creator optimization/parity windows are still reproduced separately inside the larger historical record;
+- untouched post-creator OOS remains separately reported even when it is included in the full 2016-to-present run;
+- calendar-year and rolling-window results must be reported so one unusually strong period cannot hide weak regimes;
+- no strategy may have its historical start date moved forward after results are observed merely to improve its reported performance.
+
+This is the default for new experiments and should also be applied retrospectively to existing strategies whenever suitable data can be obtained.
+
 ## Promotion ladder
 
 ### Stage 0 — source reconstruction
@@ -39,6 +55,7 @@ No OOS failure may be repaired by selecting a nearby parameter after seeing the 
 
 A strategy becomes a serious long-term contender only when the evidence supports all of the following:
 
+- the standard historical evaluation targets **2016-to-present** whenever trustworthy data permits;
 - **at least 5 years of independent non-optimization evidence in total** when data permits;
 - evidence spans materially different volatility/trend regimes rather than one unusually favorable period;
 - at least 24 months of untouched post-source OOS before any automation promotion, with the long-run target being 5 years of frozen OOS/forward evidence;
@@ -106,11 +123,12 @@ For each new experiment:
 1. define the source and frozen candidate rules;
 2. implement and regression-test locally;
 3. establish parity/structural fidelity;
-4. define OOS, cost, robustness, and regime checks before reading their outcome;
-5. run one deliberate full validation pass;
-6. classify as reject, unresolved, watchlist, or validated-signal contender;
-7. monitor only strategies whose evidence justifies consuming ongoing resources;
-8. record the result in `docs/STRATEGY_SCOREBOARD.md`.
+4. acquire the longest trustworthy history available, targeting 2016-to-present;
+5. define OOS, cost, robustness, and regime checks before reading their outcome;
+6. run one deliberate full validation pass;
+7. classify as reject, unresolved, watchlist, or validated-signal contender;
+8. monitor only strategies whose evidence justifies consuming ongoing resources;
+9. record the result in `docs/STRATEGY_SCOREBOARD.md`.
 
 ## GitHub Actions discipline
 
