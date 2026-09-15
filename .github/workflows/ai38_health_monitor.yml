@@ -1,0 +1,116 @@
+name: AI38 automated health monitor
+
+on:
+  schedule:
+    # Tue-Sat at 03:00 UTC, after the prior FX trading day has closed.
+    - cron: "0 3 * * 2-6"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai38_health_monitor.yml"
+      - "scripts/run_ai38_health_monitor.py"
+      - "scripts/render_ai38_health_report.py"
+      - "scripts/fetch_dukascopy_gbpusd_4h.py"
+      - "ai_investing_lab/strategies/ai38_gbpusd/**"
+      - "tests/test_ai38_gbpusd.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai38_health_monitor.yml"
+      - "scripts/run_ai38_health_monitor.py"
+      - "scripts/render_ai38_health_report.py"
+      - "scripts/fetch_dukascopy_gbpusd_4h.py"
+      - "ai_investing_lab/strategies/ai38_gbpusd/**"
+      - "tests/test_ai38_gbpusd.py"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run AI38 regression tests
+        run: |
+          python -m unittest tests.test_ai38_gbpusd -v
+          python -m py_compile scripts/run_ai38_health_monitor.py scripts/render_ai38_health_report.py
+
+      - name: Install historical FX data dependencies
+        run: python -m pip install --disable-pip-version-check pandas dukascopy-python
+
+      - name: Resolve monitoring horizon
+        id: horizon
+        shell: bash
+        run: |
+          set -euo pipefail
+          END_DATE="$(date -u +%F)"
+          echo "end_date=${END_DATE}" >> "$GITHUB_OUTPUT"
+          echo "AI38 monitor end date (exclusive): ${END_DATE}"
+
+      - name: Fetch latest GBPUSD H1 history and build 4H feeds
+        run: |
+          mkdir -p health_data health_artifacts
+          python scripts/fetch_dukascopy_gbpusd_4h.py \
+            --start 2019-01-01 \
+            --end "${{ steps.horizon.outputs.end_date }}" \
+            --output-dir health_data
+
+      - name: Recompute frozen AI38 health state
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/run_ai38_health_monitor.py \
+            health_data/gbpusd_mid_4h_offset2.csv \
+            --analysis-end "${{ steps.horizon.outputs.end_date }}" \
+            --output health_artifacts/ai38_health.json \
+            > health_artifacts/console_summary.json
+          cp health_data/summary.json health_artifacts/data_summary.json
+
+      - name: Render health report
+        id: health
+        run: |
+          python scripts/render_ai38_health_report.py \
+            health_artifacts/ai38_health.json \
+            --markdown health_artifacts/AI38_HEALTH.md \
+            --github-output "$GITHUB_OUTPUT"
+          cat health_artifacts/AI38_HEALTH.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload daily health artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai38-health-${{ steps.horizon.outputs.end_date }}
+          path: health_artifacts/
+          retention-days: 30
+
+      - name: Raise or clear AI38 health alert
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CLASSIFICATION: ${{ steps.health.outputs.classification }}
+          HEADLINE: ${{ steps.health.outputs.headline }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING="$(gh issue list --repo "$REPO" --state open --search 'AI38 Health Alert in:title' --json number --jq '.[0].number // empty')"
+
+          if [[ "$CLASSIFICATION" == "high_risk_dormant" || "$CLASSIFICATION" == "structural_concern" ]]; then
+            TITLE="AI38 Health Alert — ${HEADLINE}"
+            if [[ -z "$EXISTING" ]]; then
+              gh issue create --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI38_HEALTH.md
+            else
+              gh issue edit "$EXISTING" --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI38_HEALTH.md
+            fi
+          elif [[ -n "$EXISTING" ]]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "AI38 returned to ${HEADLINE}. Closing the automated health alert. Daily research monitoring continues."
+            gh issue close "$EXISTING" --repo "$REPO" --reason completed
+          fi

@@ -1,0 +1,104 @@
+name: AI2 normalized shadow health monitor
+
+on:
+  schedule:
+    # Weekly Monday snapshot after the weekend crypto session.
+    - cron: "30 12 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai2_health_monitor.yml"
+      - "scripts/run_ai2_health_monitor.py"
+      - "scripts/fetch_binance_ethusdt_15m.py"
+      - "ai_investing_lab/strategies/ai2_eth/**"
+      - "tests/test_ai2_eth.py"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run AI2 regression tests
+        run: python -m unittest tests.test_ai2_eth -v
+
+      - name: Resolve monitoring horizon
+        id: horizon
+        shell: bash
+        run: |
+          END_DATE="$(date -u +%F)"
+          echo "end_date=${END_DATE}" >> "$GITHUB_OUTPUT"
+          echo "AI2 monitor end date (exclusive): ${END_DATE}"
+
+      - name: Fetch ETHUSDT 15m history
+        run: |
+          mkdir -p ai2_health_data ai2_health
+          python scripts/fetch_binance_ethusdt_15m.py \
+            --start 2023-01-01 \
+            --end "${{ steps.horizon.outputs.end_date }}" \
+            --output ai2_health_data/ethusdt_15m.csv \
+            --summary ai2_health_data/data_summary.json
+
+      - name: Recompute frozen normalized AI2 health
+        run: |
+          python scripts/run_ai2_health_monitor.py \
+            ai2_health_data/ethusdt_15m.csv \
+            --analysis-end "${{ steps.horizon.outputs.end_date }}" \
+            --output-dir ai2_health \
+            | tee ai2_health/console.txt
+          cp ai2_health_data/data_summary.json ai2_health/data_summary.json
+          test -s ai2_health/ai2_health.json
+          test -s ai2_health/AI2_HEALTH.md
+          cat ai2_health/AI2_HEALTH.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read classification
+        id: health
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d=json.load(open('ai2_health/ai2_health.json'))
+          print('classification='+d['classification'])
+          print('headline='+d['headline'])
+          PY
+
+      - name: Upload AI2 health artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai2-health-${{ steps.horizon.outputs.end_date }}
+          path: ai2_health/
+          retention-days: 30
+
+      - name: Raise or clear structural health issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CLASSIFICATION: ${{ steps.health.outputs.classification }}
+          HEADLINE: ${{ steps.health.outputs.headline }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING="$(gh issue list --repo "$REPO" --state open --search 'AI2 Health Alert in:title' --json number --jq '.[0].number // empty')"
+          if [[ "$CLASSIFICATION" == "structural_concern" ]]; then
+            TITLE="AI2 Health Alert — ${HEADLINE}"
+            if [[ -z "$EXISTING" ]]; then
+              gh issue create --repo "$REPO" --title "$TITLE" --body-file ai2_health/AI2_HEALTH.md
+            else
+              gh issue edit "$EXISTING" --repo "$REPO" --title "$TITLE" --body-file ai2_health/AI2_HEALTH.md
+            fi
+          elif [[ -n "$EXISTING" ]]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "AI2 no longer meets the frozen structural-concern rule. Closing the alert; normalized shadow monitoring continues."
+            gh issue close "$EXISTING" --repo "$REPO" --reason completed
+          fi

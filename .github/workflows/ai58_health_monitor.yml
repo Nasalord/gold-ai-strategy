@@ -1,0 +1,105 @@
+name: AI58 automated health monitor
+
+on:
+  schedule:
+    # Tue-Sat at 02:00 UTC, after the prior New York FX trading day has closed.
+    - cron: "0 2 * * 2-6"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai58_health_monitor.yml"
+      - "scripts/run_ai58_health_monitor.py"
+      - "scripts/render_ai58_health_report.py"
+      - "scripts/run_ai58_regime_risk.py"
+      - "scripts/fetch_dukascopy_usdjpy.py"
+      - "ai_investing_lab/strategies/ai58_usdjpy/**"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run AI58 regression tests
+        run: python -m unittest tests.test_ai58_usdjpy tests.test_ai58_video_preset tests.test_ai58_source_fidelity -v
+
+      - name: Install historical FX data dependencies
+        run: python -m pip install --disable-pip-version-check pandas dukascopy-python
+
+      - name: Resolve monitoring horizon
+        id: horizon
+        shell: bash
+        run: |
+          set -euo pipefail
+          END_DATE="$(date -u +%F)"
+          echo "end_date=${END_DATE}" >> "$GITHUB_OUTPUT"
+          echo "AI58 monitor end date (exclusive): ${END_DATE}"
+
+      - name: Fetch latest USDJPY 15m history
+        run: |
+          mkdir -p health_data health_artifacts
+          python scripts/fetch_dukascopy_usdjpy.py \
+            --start 2011-03-18 \
+            --end "${{ steps.horizon.outputs.end_date }}" \
+            --output-dir health_data
+
+      - name: Recompute frozen AI58 health state
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/run_ai58_health_monitor.py \
+            health_data/usdjpy_mid_15m.csv \
+            --analysis-end "${{ steps.horizon.outputs.end_date }}" \
+            --output health_artifacts/ai58_health.json \
+            > health_artifacts/console_summary.json
+          cp health_data/summary.json health_artifacts/data_summary.json
+
+      - name: Render health report
+        id: health
+        run: |
+          python scripts/render_ai58_health_report.py \
+            health_artifacts/ai58_health.json \
+            --markdown health_artifacts/AI58_HEALTH.md \
+            --github-output "$GITHUB_OUTPUT"
+          cat health_artifacts/AI58_HEALTH.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload daily health artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai58-health-${{ steps.horizon.outputs.end_date }}
+          path: health_artifacts/
+          retention-days: 30
+
+      - name: Raise or clear AI58 health alert
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CLASSIFICATION: ${{ steps.health.outputs.classification }}
+          HEADLINE: ${{ steps.health.outputs.headline }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING="$(gh issue list --repo "$REPO" --state open --search 'AI58 Health Alert in:title' --json number --jq '.[0].number // empty')"
+
+          if [[ "$CLASSIFICATION" == "high_risk_dormant" || "$CLASSIFICATION" == "structural_concern" ]]; then
+            TITLE="AI58 Health Alert — ${HEADLINE}"
+            if [[ -z "$EXISTING" ]]; then
+              gh issue create --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI58_HEALTH.md
+            else
+              gh issue edit "$EXISTING" --repo "$REPO" --title "$TITLE" --body-file health_artifacts/AI58_HEALTH.md
+            fi
+          elif [[ -n "$EXISTING" ]]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "AI58 returned to ${HEADLINE}. Closing the automated health alert. Daily research monitoring continues."
+            gh issue close "$EXISTING" --repo "$REPO" --reason completed
+          fi
