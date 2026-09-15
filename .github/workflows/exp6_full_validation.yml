@@ -1,0 +1,105 @@
+name: EXP6 full frozen validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review]
+    paths:
+      - "ai_investing_lab/strategies/triple_macd_nq/**"
+      - "scripts/run_exp6_*.py"
+      - "scripts/check_exp6_frozen_fingerprints.py"
+      - "tests/test_triple_macd_nq.py"
+      - ".github/workflows/exp6_full_validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exp6-full-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-validation:
+    # PR execution is explicit: add [full-validate] to the PR title and move the
+    # PR from draft to ready. Normal PR edits never launch this heavy suite.
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[full-validate]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install research package and test dependency
+        run: python -m pip install --disable-pip-version-check -e . pytest
+
+      - name: Run EXP6 deterministic regression tests
+        run: python -m pytest tests/test_triple_macd_nq.py -q
+
+      - name: Reproduce creator-overlap structural parity
+        run: python scripts/run_exp6_public_nq_parity.py
+
+      - name: Reproduce untouched Jun-Oct 2025 OOS
+        run: python scripts/run_exp6_public_oos.py
+
+      - name: Reproduce 2025 predeclared local robustness
+        run: python scripts/run_exp6_public_robustness.py
+
+      - name: Reproduce 2023-2025 regime diagnostic
+        run: python scripts/run_exp6_public_regimes.py
+
+      - name: Reproduce May-Sep 2026 independent recovery sample
+        run: python scripts/run_exp6_2026_sample.py
+
+      - name: Reproduce 2026 predeclared local robustness
+        run: python scripts/run_exp6_2026_robustness.py
+
+      - name: Verify frozen historical fingerprints
+        run: python scripts/check_exp6_frozen_fingerprints.py
+
+      - name: Write compact validation summary
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          def read(path):
+              return json.loads(Path(path).read_text())
+
+          p = read('exp6_public_parity/exp6_public_parity.json')['creator_8_5m']
+          o = read('exp6_public_oos/exp6_public_oos.json')['metrics']['creator_8_5m']
+          s = read('exp6_2026_sample/exp6_2026_sample.json')['metrics']['creator_8_5m']
+          r25 = read('exp6_public_robustness/exp6_public_robustness.json')['summary']
+          r26 = read('exp6_2026_robustness/exp6_2026_robustness.json')['summary']
+
+          print('# EXP6 frozen full-validation summary')
+          print()
+          print(f"- Creator-overlap reconstruction: {p['trades']} trades, {p['net_profit_pct']:.2f}% net, PF {p['profit_factor']:.3f}")
+          print(f"- Fresh Jun-Oct 2025 OOS: {o['trades']} trades, {o['net_profit_pct']:.2f}% net, PF {o['profit_factor']:.3f}")
+          print(f"- 2025 neighbours profitable + PF>1: {r25['positive_and_pf_gt_1']}/{r25['neighbors']}")
+          print(f"- May-Sep 2026 recovery: {s['trades']} trades, {s['net_profit_pct']:.2f}% net, PF {s['profit_factor']:.3f}")
+          print(f"- 2026 neighbours profitable + PF>1: {r26['positive_and_pf_gt_1']}/{r26['neighbors']}")
+          print()
+          print('Expected classification: WATCHLIST / SHADOW-PAPER RESEARCH ONLY. Parameters remain frozen.')
+          PY
+
+      - name: Upload full EXP6 validation bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: exp6-full-frozen-validation
+          path: |
+            exp6_public_parity/
+            exp6_public_oos/
+            exp6_public_robustness/
+            exp6_public_regimes/
+            exp6_2026_sample/
+            exp6_2026_robustness/
+          retention-days: 14
