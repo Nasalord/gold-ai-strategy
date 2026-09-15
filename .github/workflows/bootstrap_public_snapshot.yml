@@ -1,0 +1,78 @@
+name: Bootstrap sanitized Gold AI Strategy snapshot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".bootstrap/xz/**"
+      - ".github/workflows/bootstrap_public_snapshot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-public-snapshot
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct and verify sanitized bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/xz/chunk_* | base64 -d > /tmp/gold-public.tar.xz
+          test "$(wc -c < /tmp/gold-public.tar.xz | tr -d ' ')" = "104820"
+          echo "a66be793ba33388e1a8d7e87a01154ce2aefe33acb0f56704d237b1a6297ec40  /tmp/gold-public.tar.xz" | sha256sum -c -
+
+      - name: Extract and privacy-check snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gold-public
+          mkdir -p /tmp/gold-public
+          tar -xJf /tmp/gold-public.tar.xz -C /tmp/gold-public
+
+          # Legacy source workflows are intentionally not published. Public CI
+          # is rebuilt below with narrowly scoped, low-usage triggers.
+          rm -rf /tmp/gold-public/.github/workflows
+
+          if find /tmp/gold-public -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' \) -print | grep -q .; then
+            echo "Sensitive-looking file type found; refusing to publish."
+            exit 1
+          fi
+
+          if grep -RIlE '22474\.95|snapshots\.db|github_pat_|ghp_[A-Za-z0-9]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----' /tmp/gold-public; then
+            echo "Privacy scan failed; refusing to publish."
+            exit 1
+          fi
+
+      - name: Install sanitized snapshot and lean CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a /tmp/gold-public/. .
+          mkdir -p .github/workflows
+          printf '%s' 'bmFtZTogQ0kKCm9uOgogIHB1bGxfcmVxdWVzdDoKICAgIGJyYW5jaGVzOiBbbWFpbl0KICAgIHR5cGVzOiBbb3BlbmVkLCBzeW5jaHJvbml6ZSwgcmVvcGVuZWQsIHJlYWR5X2Zvcl9yZXZpZXddCiAgICBwYXRoczoKICAgICAgLSAiYWlfaW52ZXN0aW5nX2xhYi8qKiIKICAgICAgLSAidGVzdHMvKioiCiAgICAgIC0gInNjcmlwdHMvKioiCiAgICAgIC0gInB5cHJvamVjdC50b21sIgogICAgICAtICIuZ2l0aHViL3dvcmtmbG93cy9jaS55bWwiCiAgcHVzaDoKICAgIGJyYW5jaGVzOiBbbWFpbl0KICAgIHBhdGhzOgogICAgICAtICJhaV9pbnZlc3RpbmdfbGFiLyoqIgogICAgICAtICJ0ZXN0cy8qKiIKICAgICAgLSAic2NyaXB0cy8qKiIKICAgICAgLSAicHlwcm9qZWN0LnRvbWwiCiAgICAgIC0gIi5naXRodWIvd29ya2Zsb3dzL2NpLnltbCIKICB3b3JrZmxvd19kaXNwYXRjaDoKCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiByZWFkCgpjb25jdXJyZW5jeToKICBncm91cDogJHt7IGdpdGh1Yi53b3JrZmxvdyB9fS0ke3sgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC5udW1iZXIgfHwgZ2l0aHViLnJlZiB9fQogIGNhbmNlbC1pbi1wcm9ncmVzczogdHJ1ZQoKam9iczoKICB0ZXN0OgogICAgaWY6ICR7eyBnaXRodWIuZXZlbnRfbmFtZSAhPSAncHVsbF9yZXF1ZXN0JyB8fCBnaXRodWIuZXZlbnQucHVsbF9yZXF1ZXN0LmRyYWZ0ID09IGZhbHNlIH19CiAgICBydW5zLW9uOiB1YnVudHUtbGF0ZXN0CiAgICB0aW1lb3V0LW1pbnV0ZXM6IDEwCiAgICBzdGVwczoKICAgICAgLSB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QHY0CiAgICAgIC0gdXNlczogYWN0aW9ucy9zZXR1cC1weXRob25AdjUKICAgICAgICB3aXRoOgogICAgICAgICAgcHl0aG9uLXZlcnNpb246ICIzLjExIgogICAgICAgICAgY2FjaGU6IHBpcAogICAgICAgICAgY2FjaGUtZGVwZW5kZW5jeS1wYXRoOiBweXByb2plY3QudG9tbAogICAgICAtIHJ1bjogcHl0aG9uIC1tIHBpcCBpbnN0YWxsIC1lIC4KICAgICAgLSBydW46IHB5dGVzdCAtcQo=' | base64 -d > .github/workflows/ci.yml
+
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap_public_snapshot.yml
+
+      - name: Commit public baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish sanitized Gold AI Strategy baseline"
+          git push
