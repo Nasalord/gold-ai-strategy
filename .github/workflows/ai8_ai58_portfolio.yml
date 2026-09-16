@@ -1,0 +1,94 @@
+name: AI8 plus AI58 frozen $5k portfolio
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review]
+    paths:
+      - "scripts/run_ai8_ai58_portfolio.py"
+      - ".github/workflows/ai8_ai58_portfolio.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai8-ai58-portfolio-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portfolio:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, '[portfolio-test]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project and data dependency
+        run: python -m pip install --disable-pip-version-check -e . pytest pandas dukascopy-python
+
+      - name: Compile runner and verify frozen engines
+        run: |
+          python -m py_compile scripts/run_ai8_ai58_portfolio.py
+          python -m pytest tests/test_ai8_btc.py tests/test_ai58_usdjpy.py tests/test_ai58_source_fidelity.py -q
+
+      - name: Fetch earliest available Binance BTCUSDT 2h history
+        run: >-
+          python scripts/fetch_binance_btcusdt_2h.py
+          --start 2017-08-17
+          --end 2026-09-16
+          --market spot
+          --output portfolio_data/btcusdt_2h.csv
+
+      - name: Fetch USDJPY warmup plus common-history data
+        run: >-
+          python scripts/fetch_dukascopy_usdjpy.py
+          --start 2015-01-01
+          --end 2026-09-16
+          --output-dir portfolio_data/usdjpy
+
+      - name: Run frozen AI8 plus AI58 portfolio experiment
+        run: >-
+          python scripts/run_ai8_ai58_portfolio.py
+          --btc portfolio_data/btcusdt_2h.csv
+          --jpy portfolio_data/usdjpy/usdjpy_mid_15m.csv
+          --end 2026-09-16
+          --output portfolio_results/ai8_ai58_portfolio.json
+
+      - name: Write compact summary
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          d=json.loads(Path('portfolio_results/ai8_ai58_portfolio.json').read_text())
+          print('# AI8 + AI58 frozen $5k portfolio')
+          print()
+          print('| Allocation | Ending $ | CAGR % | PF | DD % | 2x-cost ending $ | 2x PF | 2x DD % |')
+          print('|---|---:|---:|---:|---:|---:|---:|---:|')
+          for key in ['ai8_only','ai8_75_ai58_25','ai8_50_ai58_50','ai8_25_ai58_75','ai58_only']:
+              b=d['baseline_allocations'][key]
+              s=d['double_cost_allocations'][key]
+              print(f"| {key} | {b['ending_equity_usd']:.2f} | {b['cagr_pct']:.2f} | {b['profit_factor']:.3f} | {b['max_closed_trade_drawdown_pct']:.2f} | {s['ending_equity_usd']:.2f} | {s['profit_factor']:.3f} | {s['max_closed_trade_drawdown_pct']:.2f} |")
+          p=d['baseline_allocations']['ai8_50_ai58_50']
+          print()
+          print(f"Primary 50/50 monthly sleeve-return correlation: {p['monthly_sleeve_return_correlation']:.3f}")
+          print(f"Months both sleeves negative: {p['months_both_negative']}")
+          print('The 50/50 allocation is primary. 75/25 and 25/75 are predeclared diagnostics only; no post-hoc allocation selection is permitted.')
+          PY
+
+      - name: Upload portfolio evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai8-ai58-frozen-portfolio
+          path: portfolio_results/
+          retention-days: 14
